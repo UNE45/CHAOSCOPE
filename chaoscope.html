@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CHAOSCOPE</title>
+<style>
+:root{
+  --bg:#0f1220;--fg:#e8eaf6;--accent:#7c4dff;--good:#2ecc71;--bad:#e53935
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:linear-gradient(135deg,#0f1220,#1b1f3b);color:var(--fg);transition:.4s}
+header{padding:24px;text-align:center;position:sticky;top:0;background:rgba(15,18,32,.8);backdrop-filter:blur(6px);border-bottom:1px solid #2a2e5a}
+h1{margin:0;font-size:2.2rem;letter-spacing:.06em}
+#status{opacity:.9}
+main{max-width:1000px;margin:auto;padding:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.card{background:#14183a;border:1px solid #2a2e5a;border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.card h2{margin-top:0}
+button,select,input,textarea{background:#1f245a;color:var(--fg);border:1px solid #2a2e5a;border-radius:12px;padding:10px;margin:4px;cursor:pointer}
+button.primary{background:var(--accent)}
+button.warn{background:var(--bad)}
+button.good{background:var(--good)}
+button.big{font-size:1.6rem;padding:18px}
+textarea{width:100%;min-height:80px}
+.moods button{font-size:28px}
+#hud{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:10px}
+#bar{height:10px;background:#2a2e5a;border-radius:999px;overflow:hidden}
+#fill{height:100%;width:0%;background:linear-gradient(90deg,#2ecc71,#e53935)}
+.shake{animation:shake .25s infinite}
+.glitch{filter:hue-rotate(130deg) contrast(1.3)}
+@keyframes shake{0%{transform:translate(1px,1px)}50%{transform:translate(-1px,-1px)}100%{transform:translate(1px,-1px)}}
+footer{text-align:center;opacity:.6;padding:20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔮 CHAOSCOPE</h1>
+  <p id="status">A mood‑driven chaos game.</p>
+  <div class="moods">
+    <button onclick="setMood('happy')">😄</button>
+    <button onclick="setMood('tired')">😴</button>
+    <button onclick="setMood('angry')">😡</button>
+    <button onclick="setMood('overload')">🤯</button>
+  </div>
+  <div id="hud">
+    <div>Chaos: <strong><span id="chaos">0</span></strong></div>
+    <div id="bar"><div id="fill"></div></div>
+    <div>Ending Path: <strong><span id="path">Unknown</span></strong></div>
+  </div>
+</header>
+
+<main class="grid">
+
+<!-- Useless Machine -->
+<section class="card">
+  <h2>🚨 The Button</h2>
+  <p>Every press shapes your ending.</p>
+  <button class="warn big" onclick="doNotPress()">DO NOT PRESS</button>
+</section>
+
+<!-- Excuses -->
+<section class="card">
+  <h2>📝 Excuse Engine</h2>
+  <select id="excuseType">
+    <option>School</option><option>Work</option><option>Aliens</option><option>Dog</option>
+  </select>
+  <div>
+    <button onclick="genExcuse()">Generate</button>
+    <button onclick="makeWorse()">Make Worse</button>
+  </div>
+  <p id="excuse"></p>
+</section>
+
+<!-- One Button Game -->
+<section class="card">
+  <h2>🎮 Reflex Trial</h2>
+  <p>Click only when it glows green.</p>
+  <button id="reflex" class="big">⬤</button>
+  <p>Score: <span id="reflexScore">0</span></p>
+</section>
+
+<!-- Idle -->
+<section class="card">
+  <h2>⏳ Idle Loop</h2>
+  <p>Energy: <span id="energy">0</span></p>
+  <button onclick="idle()">Collect</button>
+</section>
+
+<!-- Boss -->
+<section class="card">
+  <h2>👹 Boss Room</h2>
+  <p id="boss">👹</p>
+  <p>HP: <span id="bossHp"></span></p>
+  <button class="primary" onclick="hitBoss()">Attack</button>
+</section>
+
+<!-- AI Mood -->
+<section class="card">
+  <h2>🤖 Mood AI</h2>
+  <input id="chatIn" placeholder="Talk to it…" />
+  <button onclick="chat()">Send</button>
+  <p>Mood: <span id="aiMood">neutral</span></p>
+  <p id="chatOut"></p>
+</section>
+
+</main>
+
+<footer>
+  <p>Your choices persist. Reloading won't save you.</p>
+</footer>
+
+<script>
+/* ===== SAVE SYSTEM ===== */
+let save = JSON.parse(localStorage.getItem('chaoscope')) || {chaos:0,presses:0,reflex:0,energy:0,bosses:0,ending:null}
+let chaos=save.chaos, presses=save.presses, reflexScore=save.reflex, energy=save.energy, bossHp=8, bosses=save.bosses
+const chaosEl=document.getElementById('chaos'), fill=document.getElementById('fill'), status=document.getElementById('status'), pathEl=document.getElementById('path')
+function persist(){localStorage.setItem('chaoscope',JSON.stringify({chaos,presses,reflex:reflexScore,energy,bosses,ending:save.ending}))}
+
+/* ===== UI ===== */
+function updateUI(){chaosEl.textContent=chaos;fill.style.width=Math.min(100,chaos*5)+'%';pathEl.textContent=endingPath()}
+updateUI()
+
+/* ===== MOODS ===== */
+function setMood(m){document.body.className='';
+  if(m==='happy'){document.body.style.background='linear-gradient(135deg,#1b5e20,#2ecc71)';status.textContent='Optimism rises';chaos=Math.max(0,chaos-1)}
+  if(m==='tired'){document.body.style.background='linear-gradient(135deg,#263238,#34495e)';status.textContent='Entropy idles'}
+  if(m==='angry'){document.body.style.background='linear-gradient(135deg,#6d1b1b,#e53935)';status.textContent='Aggression detected';chaos++}
+  if(m==='overload'){document.body.classList.add('shake');status.textContent='SYSTEM OVERLOAD';chaos+=2}
+  persist();updateUI()}
+
+/* ===== USELESS BUTTON ===== */
+function doNotPress(){presses++;chaos++;document.body.classList.add('shake');status.textContent=presses<5?'Stop.':'You chose this.';setTimeout(()=>document.body.classList.remove('shake'),300);persist();updateUI();checkEnding()}
+
+/* ===== EXCUSES ===== */
+const pools={School:['Printer exploded','Homework evolved'],Work:['Server died','Calendar revolt'],Aliens:['Abducted','Timeline shifted'],Dog:['Dog ate it','Dog deployed to prod']}
+let cur=''
+function genExcuse(){cur=pools[excuseType.value][Math.floor(Math.random()*2)];excuse.textContent=cur}
+function makeWorse(){cur+='…and then reality bent.';excuse.textContent=cur;chaos++;persist();updateUI()}
+
+/* ===== REFLEX GAME ===== */
+const btn=document.getElementById('reflex');let green=false
+setInterval(()=>{green=Math.random()>.6;btn.style.background=green?'#2ecc71':'#e53935'},800)
+btn.onclick=()=>{if(green){reflexScore++;document.getElementById('reflexScore').textContent=reflexScore}else chaos++;persist();updateUI()}
+
+/* ===== IDLE ===== */
+function idle(){energy++;document.getElementById('energy').textContent=energy;if(energy>10){status.textContent='Grinding detected';chaos++}persist();updateUI()}
+
+/* ===== BOSS ===== */
+function hitBoss(){bossHp--;if(bossHp<=0){bosses++;bossHp=8;status.textContent='Another emerges.';chaos+=2}document.getElementById('bossHp').textContent=bossHp;persist();updateUI();checkEnding()}
+
+document.getElementById('bossHp').textContent=bossHp
+
+/* ===== AI ===== */
+function chat(){const t=chatIn.value.toLowerCase();let mood='neutral';if(/hate|stupid|bad/.test(t)){mood='angry';chaos++}if(/hi|love|thanks/.test(t))mood='happy';aiMood.textContent=mood;chatOut.textContent=mood==='angry'?'That was unnecessary.':'Hello.';persist();updateUI()}
+
+/* ===== ENDINGS ===== */
+function endingPath(){if(chaos<5)return'Order';if(chaos<12)return'Unstable';return'Chaos'}
+function checkEnding(){if(chaos>=20 && !save.ending){save.ending='Chaos';ending()}}
+function ending(){document.body.innerHTML=`<main style="text-align:center;padding:40px"><h1>ENDING: ${endingPath().toUpperCase()}</h1><p>Your behavior defined reality.</p><button onclick="reset()">Restart Timeline</button></main>`;persist()}
+function reset(){localStorage.removeItem('chaoscope');location.reload()}
+
+/* ===== SECRETS ===== */
+let secret='';document.addEventListener('keydown',e=>{secret+=e.key.toLowerCase();if(secret.includes('banana')){document.body.classList.add('glitch');status.textContent='🍌 Banana Ending Path unlocked';chaos+=3;secret='';updateUI()}})
+</script>
+</body>
+</html>
